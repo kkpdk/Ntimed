@@ -96,7 +96,14 @@ main_client(int argc, char *const *argv)
 
 	Param_Report(NULL, OCX_TRACE);
 
+#ifndef NOIPV6
+	/* Attempt IPv6, fall back to IPv4 */
+	fd = UdpTimedSocket(NULL, AF_INET6);
+	if (fd < 0)
+		fd = UdpTimedSocket(NULL, AF_INET);
+#else
 	fd = UdpTimedSocket(NULL, AF_INET);
+#endif
 	if (fd < 0)
 		Fail(NULL, errno, "Could not open UDP socket");
 
