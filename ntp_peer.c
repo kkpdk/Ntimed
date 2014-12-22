@@ -140,12 +140,7 @@ int addr_is_same(struct sockaddr *a, struct sockaddr *b)
 		    ((struct sockaddr_in*)b)->sin_port)
 			return 0;
 		/* 'a' should have the form: 0:0:0:0:0:FFFF:IPv4:IPv4 */
-		if (((struct sockaddr_in6*)a)->sin6_addr.s6_addr16[0] ||
-		    ((struct sockaddr_in6*)a)->sin6_addr.s6_addr16[1] ||
-		    ((struct sockaddr_in6*)a)->sin6_addr.s6_addr16[2] ||
-		    ((struct sockaddr_in6*)a)->sin6_addr.s6_addr16[3] ||
-		    ((struct sockaddr_in6*)a)->sin6_addr.s6_addr16[4] ||
-		    ((struct sockaddr_in6*)a)->sin6_addr.s6_addr16[5]!=0xFFFFU)
+		if (!IN6_IS_ADDR_V4MAPPED(&((struct sockaddr_in6*)a)->sin6_addr))
 			return 0;
 		if (((struct sockaddr_in6*)a)->sin6_addr.s6_addr32[3] !=
 		    ((struct sockaddr_in*)b)->sin_addr.s_addr)
