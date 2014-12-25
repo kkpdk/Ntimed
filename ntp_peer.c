@@ -30,6 +30,7 @@
 #include <string.h>
 #include <poll.h>
 #include <netdb.h>
+#include <netinet/in.h>
 #include <sys/socket.h>
 
 #include "ntimed.h"
@@ -103,10 +104,10 @@ NTP_Peer_Destroy(struct ntp_peer *np)
 }
 
 #ifndef NOIPV6
-int addr_is_same(struct sockaddr *a, struct sockaddr *b)
+static int addr_is_same(struct sockaddr_storage *a, struct sockaddr_storage *b)
 {
 	/* This is bulky. Is there a better way? */
-	if (a->sa_family == AF_INET && b->sa_family == AF_INET) {
+	if (a->ss_family == AF_INET && b->ss_family == AF_INET) {
 		/* ipv4: compare port and address, ignore padding. */
 		if (((struct sockaddr_in*)a)->sin_port !=
 		    ((struct sockaddr_in*)b)->sin_port)
@@ -116,24 +117,24 @@ int addr_is_same(struct sockaddr *a, struct sockaddr *b)
 			return 0;
 		return 1;
 	}
-	if (a->sa_family == AF_INET6 && b->sa_family == AF_INET6) {
+	if (a->ss_family == AF_INET6 && b->ss_family == AF_INET6) {
 		/* ipv6: compare port and address, ignore flowlabel. */
 		if (((struct sockaddr_in6*)a)->sin6_port !=
 		    ((struct sockaddr_in6*)b)->sin6_port)
 			return 0;
-		if (memcmp(&((struct sockaddr_in6*)a)->sin6_addr,
-		           &((struct sockaddr_in6*)b)->sin6_addr,
-		           sizeof(struct in6_addr)))
+		if (!IN6_ARE_ADDR_EQUAL(
+		           &((struct sockaddr_in6*)a)->sin6_addr,
+		           &((struct sockaddr_in6*)b)->sin6_addr))
 			return 0;
 		return 1;
 	}
-	if (a->sa_family == AF_INET && b->sa_family == AF_INET6) {
-		struct sockaddr *tmp;
+	if (a->ss_family == AF_INET && b->ss_family == AF_INET6) {
+		struct sockaddr_storage *tmp;
 		tmp = a;
 		a = b;
 		b = tmp;
 	}
-	if (a->sa_family == AF_INET6 && b->sa_family == AF_INET) {
+	if (a->ss_family == AF_INET6 && b->ss_family == AF_INET) {
 		/* comparing IPv6 to IPv4. Check port, and for a */
 		/* matching IPv4 address in the IPv6 address field.*/
 		if (((struct sockaddr_in6*)a)->sin6_port !=
@@ -142,9 +143,9 @@ int addr_is_same(struct sockaddr *a, struct sockaddr *b)
 		/* 'a' should have the form: 0:0:0:0:0:FFFF:IPv4:IPv4 */
 		if (!IN6_IS_ADDR_V4MAPPED(&((struct sockaddr_in6*)a)->sin6_addr))
 			return 0;
-		if (((struct sockaddr_in6*)a)->sin6_addr.s6_addr32[3] !=
-		    ((struct sockaddr_in*)b)->sin_addr.s_addr)
-			return 0;
+		if (memcmp(((struct sockaddr_in6*)a)->sin6_addr.s6_addr+12,
+		           &((struct sockaddr_in*)b)->sin_addr, 4))
+		    return 0;
 		return 1;
 	}
 
@@ -171,8 +172,8 @@ NTP_Peer_Poll(struct ocx *ocx, int fd, const struct ntp_peer *np, double tmo)
 	assert(tmo > 0.0 && tmo <= 1.0);
 
 	len = NTP_Packet_Pack(buf, sizeof buf, np->tx_pkt);
-
-	l = sendto(fd, buf, len, 0, np->sa, np->sa_len);
+	
+	l = sendto(fd, buf, len, 0, (struct sockaddr*) np->sa, np->sa_len);
 	if (l != len)
 		Fail(ocx, l < 0 ? 1 : 0,
 		    "Tx peer %s %s got %zd", np->hostname, np->ip, l);
@@ -213,7 +214,7 @@ NTP_Peer_Poll(struct ocx *ocx, int fd, const struct ntp_peer *np, double tmo)
 
 		/* Ignore packets from other hosts */
 #ifndef NOIPV6
-		if (!addr_is_same((struct sockaddr*)&rss, np->sa))
+		if (!addr_is_same(&rss, np->sa))
 			continue;
 #else
 		if (np->sa_len != rssl || memcmp(np->sa, &rss, rssl))

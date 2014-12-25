@@ -25,6 +25,7 @@
  */
 
 #include <string.h>
+#include <netinet/in.h>
 #include <sys/socket.h>
 
 #include "ntimed.h"
@@ -40,13 +41,35 @@ UdpTimedSocket(struct ocx *ocx, int fam)
 	if (fd < 0)
 		Fail(ocx, 1, "socket(2) failed");
 
-#ifdef IP_RECVDSTADDR
+#ifndef NOIPV6
+    if (fam == AF_INET6) {
+	const int off = 0;
+        if (setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY,
+	       (void *) &off, sizeof(off)) < 0) {
+		AZ(close(fd));
+		Fail(ocx, 1, "setsockopt(IPV6_V6ONLY) failed");
+        }
+    }
+ #ifdef IPV6_PKTINFO
+ /*Temporarily removed. Needs support in UdpTimedRx
+	i = 1;
+	if (setsockopt(fd, IPPROTO_IPV6, IPV6_PKTINFO, &i, sizeof i) != 0) {
+		AZ(close(fd));
+		Fail(ocx, 1, "setsockopt(IPV6_PKTINFO) failed");
+	}
+	*/
+ #endif
+#else    
+ #ifdef IP_RECVDSTADDR
 	i = 1;
 	if (setsockopt(fd, IPPROTO_IP, IP_RECVDSTADDR, &i, sizeof i) != 0) {
 		AZ(close(fd));
 		Fail(ocx, 1, "setsockopt(IP_RECVDSTADDR) failed");
 	}
+ #endif
 #endif
+
+
 #ifdef SO_TIMESTAMPNS
 	i = 1;
 	(void)setsockopt(fd, SOL_SOCKET, SO_TIMESTAMPNS, &i, sizeof i);

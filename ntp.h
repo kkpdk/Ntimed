@@ -97,7 +97,7 @@ struct ntp_peer {
 #define NTP_PEER_MAGIC			0xbf0740a0
 	char				*hostname;
 	char				*ip;
-	struct sockaddr			*sa;
+	struct sockaddr_storage		*sa;
 	unsigned			sa_len;
 	struct ntp_packet		*tx_pkt;
 	struct ntp_packet		*rx_pkt;
